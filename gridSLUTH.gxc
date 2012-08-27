@@ -1,0 +1,990 @@
+//===========================================================================
+NAME          = "GRIDSLUTH"
+#include <version.gxh>
+DESCRIPTION   = "
+Compute source parameters using SLUTH method.
+
+Parameters: 
+
+      GRIDSLUTH.TGL     Lower total field grid.
+               .DXL     X direction derivative grid.
+               .DYL     Y direction derivative grid.                          
+               .DZL     Z direction derivative grid.
+               .UPC     number of cells upward continuation			   
+               .TGU     Total field grid upward continued rrUPC grid cells.                          
+               .DXU     Y direction derivative grid.                          
+               .DYU     Z direction derivative grid.                          
+               .DZU     Y direction derivative grid.                          
+               .MGL     Output M value grid.
+               .MGU     Output M value grid.
+               .STG     Output strike grid.
+               .IND     Output index grid.
+               .DEP     Output depth grid.
+"
+
+//===========================================================================
+// Revision History:
+//
+// v1.0.0   created from GRIDRAT.gxc
+// written by Richard Smith
+// this version reads in grids on a row by row basis. Apparently this could 
+// be done faster reading from a pager object.    
+//===========================================================================
+
+RESOURCE = "gridsluth.gr"
+#include "gridsluth.grh"
+
+//===========================================================================
+
+#include <all.gxh>
+
+//===========================================================================
+//                             GLOBAL VARIABLES
+//===========================================================================
+
+DGW        Diag;        // Dialogue handle
+
+int        i,ipercent;           // utility int
+
+string(STR_FILE)  sTgl;      // Name of lower total field input grid 
+string(STR_FILE)  sDxl;      // Name of lower dx input grid 
+string(STR_FILE)  sDyl;      // Name of lower dy input grid 
+string(STR_FILE)  sDzl;      // Name of lower dz  input grid 
+string(STR_FILE)  sTgu;      // Name of upper total field grid 
+string(STR_FILE)  sDxu;      // Name of upper dx input grid 
+string(STR_FILE)  sDyu;      // Name of upper dy input grid 
+string(STR_FILE)  sDzu;      // Name of upper dz  input grid 
+string(STR_FILE)  sMgl;      // Name of lower M values output grid
+string(STR_FILE)  sMgu;      // Name of upper M values output grid
+string(STR_FILE)  sStg;      // Name of strike output grid
+string(STR_FILE)  sSsd;      // Name of strike standard deviation output grid
+string(STR_FILE)  sInd;      // Name of index output grid
+string(STR_FILE)  sDep;      // Name of depth output grid
+
+string(STR_DEFAULT) sTemp;           // Temporary string
+
+int irow,icol,inrows,incols;   
+int iint;
+int ii,icomb;
+int jj;
+real rMax;
+real rval,tmp;
+real rC,rt,rn,rdepth,deltar,rtheta;
+real(9) mval,tval,dzval;
+real(12) xint, yint, tuint,dzuint;
+real delx, dely;
+real(67) stk;
+real xave,yave,tuave,dzuave;
+real stkave;
+real stksd,rUPC;
+real mvalL,tL,dzL;
+//handles to data pointers 
+VV  hVV;
+VM  hVM0,hVM1,hVM2,hVMst,hVMsd;
+VM  hVMtu0,hVMtu1,hVMtu2;
+VM  hVMdzu0,hVMdzu1,hVMdzu2;
+VM  hVMi,hVMd;
+VM  hVML,hVMtL,hVMdzL;
+
+IMG         IMGTGL;     // Image for the tgl input grid
+IMG         IMGDXL;     // Image for the dxl input grid
+IMG         IMGDYL;     // Image for the dyl input grid
+IMG         IMGDZL;     // Image for the dzl input grid
+IMG         IMGTGU;     // Image for the tgu input grid
+IMG         IMGDXU;     // Image for the dxu input grid
+IMG         IMGDYU;     // Image for the dyu input grid
+IMG         IMGDZU;     // Image for the dzu  input grid
+IMG         IMGMGL;     // Image for the output lower M values grid
+IMG         IMGMGU;     // Image for the output upper M values grid
+IMG         IMGOST;     // Image for the output strike values grid
+IMG         IMGOSD;     // Image for the output strike std. dev. values grid
+IMG         IMGIND;     // Image for the output index values grid
+IMG         IMGDEP;     // Image for the output depth values grid
+IEXP        IEXP0;      // Image expression to calculate ML
+IEXP        IEXP1;      // Image expression to calculate MU
+
+
+//===========================================================================
+//                            GRID UTIL CODE
+//===========================================================================
+
+{
+
+
+   if (iInteractive_SYS())
+   {
+
+      // --- Create the Dialogue ---
+
+      Diag = Create_DGW("GRIDSLUTHForm");              //line 100
+   
+      // --- Set any Defaults from INI ---    
+
+      SetInfoSYS_DGW(Diag,_GRIDSLUTHFORM_0,DGW_FILEPATH,"GRIDSLUTH","TGL");     
+      SetInfoSYS_DGW(Diag,_GRIDSLUTHFORM_1,DGW_FILEPATH,"GRIDSLUTH","DXL");     
+      SetInfoSYS_DGW(Diag,_GRIDSLUTHFORM_2,DGW_FILEPATH,"GRIDSLUTH","DYL");     
+      SetInfoSYS_DGW(Diag,_GRIDSLUTHFORM_3,DGW_FILEPATH,"GRIDSLUTH","DZL");
+      SetInfoSYS_DGW(Diag,_GRIDSLUTHFORM_4,DGW_TEXT,"GRIDSLUTH","UPC");	  
+      SetInfoSYS_DGW(Diag,_GRIDSLUTHFORM_5,DGW_FILEPATH,"GRIDSLUTH","TGU");     
+      SetInfoSYS_DGW(Diag,_GRIDSLUTHFORM_6,DGW_FILEPATH,"GRIDSLUTH","DXU");     
+      SetInfoSYS_DGW(Diag,_GRIDSLUTHFORM_7,DGW_FILEPATH,"GRIDSLUTH","DYU");     
+      SetInfoSYS_DGW(Diag,_GRIDSLUTHFORM_8,DGW_FILEPATH,"GRIDSLUTH","DZU");     
+      SetInfoSYS_DGW(Diag,_GRIDSLUTHFORM_9,DGW_FILEPATH,"GRIDSLUTH","MGL");    
+      SetInfoSYS_DGW(Diag,_GRIDSLUTHFORM_10,DGW_FILEPATH,"GRIDSLUTH","MGU");    
+      SetInfoSYS_DGW(Diag,_GRIDSLUTHFORM_11,DGW_FILEPATH,"GRIDSLUTH","STG");     
+      SetInfoSYS_DGW(Diag,_GRIDSLUTHFORM_12,DGW_FILEPATH,"GRIDSLUTH","SSD");     
+      SetInfoSYS_DGW(Diag,_GRIDSLUTHFORM_13,DGW_FILEPATH,"GRIDSLUTH","IND");     
+      SetInfoSYS_DGW(Diag,_GRIDSLUTHFORM_14,DGW_FILEPATH,"GRIDSLUTH","DEP");     
+
+      // --- Run the Dialogue ---
+
+      i = iRunDialogue_DGW(Diag);
+      if (i != 0)  Cancel_SYS();    // User hit cancel
+
+      // --- Get the Strings and replace in INI ---
+
+      GetInfoSYS_DGW(Diag,_GRIDSLUTHFORM_0,DGW_FILEPATH,"GRIDSLUTH","TGL");     
+      GetInfoSYS_DGW(Diag,_GRIDSLUTHFORM_1,DGW_FILEPATH,"GRIDSLUTH","DXL");     
+      GetInfoSYS_DGW(Diag,_GRIDSLUTHFORM_2,DGW_FILEPATH,"GRIDSLUTH","DYL");     
+      GetInfoSYS_DGW(Diag,_GRIDSLUTHFORM_3,DGW_FILEPATH,"GRIDSLUTH","DZL");     
+      GetInfoSYS_DGW(Diag,_GRIDSLUTHFORM_4,DGW_TEXT,"GRIDSLUTH","UPC");	  
+      GetInfoSYS_DGW(Diag,_GRIDSLUTHFORM_5,DGW_FILEPATH,"GRIDSLUTH","TGU");     
+      GetInfoSYS_DGW(Diag,_GRIDSLUTHFORM_6,DGW_FILEPATH,"GRIDSLUTH","DXU");     
+      GetInfoSYS_DGW(Diag,_GRIDSLUTHFORM_7,DGW_FILEPATH,"GRIDSLUTH","DYU");     
+      GetInfoSYS_DGW(Diag,_GRIDSLUTHFORM_8,DGW_FILEPATH,"GRIDSLUTH","DZU");     
+      GetInfoSYS_DGW(Diag,_GRIDSLUTHFORM_9,DGW_FILEPATH,"GRIDSLUTH","MGL");    
+      GetInfoSYS_DGW(Diag,_GRIDSLUTHFORM_10,DGW_FILEPATH,"GRIDSLUTH","MGU");    
+      GetInfoSYS_DGW(Diag,_GRIDSLUTHFORM_11,DGW_FILEPATH,"GRIDSLUTH","STG");     
+      GetInfoSYS_DGW(Diag,_GRIDSLUTHFORM_12,DGW_FILEPATH,"GRIDSLUTH","SSD");     
+      GetInfoSYS_DGW(Diag,_GRIDSLUTHFORM_13,DGW_FILEPATH,"GRIDSLUTH","IND");     
+      GetInfoSYS_DGW(Diag,_GRIDSLUTHFORM_14,DGW_FILEPATH,"GRIDSLUTH","DEP");     
+
+      // --- Destroy the Dialogue ---
+
+      Destroy_DGW(Diag);
+
+   }
+
+   // --- Get Parameters ---
+
+   GetString_SYS("GRIDSLUTH","TGL",sTgl);
+   GetString_SYS("GRIDSLUTH","DXL",sDxl);
+   GetString_SYS("GRIDSLUTH","DYL",sDyl);
+   GetString_SYS("GRIDSLUTH","DZL",sDzl);
+   GetString_SYS("GRIDSLUTH","UPC",sTemp);
+      if (!iStrlen_STR(sTemp))
+      rUPC = 1.0;
+   else
+      rUPC = rGetReal_SYS("GRIDSLUTH","UPC");
+   GetString_SYS("GRIDSLUTH","TGU",sTgu);
+   GetString_SYS("GRIDSLUTH","DXU",sDxu);
+   GetString_SYS("GRIDSLUTH","DYU",sDyu);
+   GetString_SYS("GRIDSLUTH","DZU",sDzu);
+   GetString_SYS("GRIDSLUTH","MGL",sMgl);
+   GetString_SYS("GRIDSLUTH","MGU",sMgu);
+   GetString_SYS("GRIDSLUTH","STG",sStg);
+   GetString_SYS("GRIDSLUTH","SSD",sSsd);
+   GetString_SYS("GRIDSLUTH","IND",sInd);
+   GetString_SYS("GRIDSLUTH","DEP",sDep);
+
+
+   // --- Check for null input and output file name strings ---
+
+   if (!iStrlen_STR(sTgl))
+      Abort_SYS("Lower total field Grid Not Specified!");
+
+   if (!iStrlen_STR(sDxl))
+      Abort_SYS("Lower Dx derivative Grid Not Specified!");
+
+   if (!iStrlen_STR(sDyl))
+      Abort_SYS("Lower Dy derivative Grid Not Specified!");
+      
+   if (!iStrlen_STR(sDzl))
+      Abort_SYS("Lower Dz derivative Grid Not Specified!");
+      
+   if (!iStrlen_STR(sTgu))
+      Abort_SYS("Upward continued (two cells) Total field Grid Not Specified!");
+
+   if (!iStrlen_STR(sDxu))
+      Abort_SYS("Upper Dx derivative Grid Not Specified!");
+
+   if (!iStrlen_STR(sDyu))
+      Abort_SYS("Upper Dy derivative Grid Not Specified!");
+      
+   if (!iStrlen_STR(sDzu))
+      Abort_SYS("Upper Dz derivative Grid Not Specified!");
+      
+   if (!iStrlen_STR(sMgl))
+      Abort_SYS("Output lower M Grid File Name Not Specified!");   
+
+   if (!iStrlen_STR(sMgu))
+      Abort_SYS("Output upper M Grid File Name Not Specified!");   
+
+   if (!iStrlen_STR(sStg))
+      Abort_SYS("Output strike Grid File Name Not Specified!");   
+
+   if (!iStrlen_STR(sSsd))
+      Abort_SYS("Output strike standard deviation Grid File Name Not Specified!");   
+
+   if (!iStrlen_STR(sInd))
+      Abort_SYS("Output index Grid File Name Not Specified!");   
+
+   if (!iStrlen_STR(sDep))
+      Abort_SYS("Output depth Grid File Name Not Specified!");   
+
+  
+
+   
+     
+   
+   Progress_SYS(1);
+
+   ProgName_SYS("Creating Images...",1); 
+
+   // --- Create Images tied to the grids ---  
+   
+   IMGTGL = CreateFile_IMG(GS_DOUBLE,sTgl,IMG_FILE_READONLY);      
+   IMGDXL = CreateFile_IMG(GS_DOUBLE,sDxl,IMG_FILE_READONLY);      
+   IMGDYL = CreateFile_IMG(GS_DOUBLE,sDyl,IMG_FILE_READONLY);     
+   IMGDZL = CreateFile_IMG(GS_DOUBLE,sDzl,IMG_FILE_READONLY);
+   IMGTGU = CreateFile_IMG(GS_DOUBLE,sTgu,IMG_FILE_READONLY);      
+   IMGDXU = CreateFile_IMG(GS_DOUBLE,sDxu,IMG_FILE_READONLY);
+   IMGDYU = CreateFile_IMG(GS_DOUBLE,sDyu,IMG_FILE_READONLY);
+   IMGDZU = CreateFile_IMG(GS_DOUBLE,sDzu,IMG_FILE_READONLY);
+   IMGMGL = CreateOutFile_IMG(GS_DOUBLE,sMgl,IMGDXL); 
+   IMGMGU = CreateOutFile_IMG(GS_DOUBLE,sMgu,IMGDXL); 
+   IMGOST = CreateOutFile_IMG(GS_DOUBLE,sStg,IMGDXL); 
+   IMGOSD = CreateOutFile_IMG(GS_DOUBLE,sSsd,IMGDXL); 
+   IMGIND = CreateOutFile_IMG(GS_DOUBLE,sInd,IMGDXL); 
+   IMGDEP = CreateOutFile_IMG(GS_DOUBLE,sDep,IMGDXL); 
+
+
+   InheritIMG_IMG(IMGTGL,IMGTGL);   // is this necessary?? do same for others
+   InheritIMG_IMG(IMGDXL,IMGTGL);   // is this necessary?? do same for others
+   InheritIMG_IMG(IMGDYL,IMGTGL);   // is this necessary?? do same for others
+   InheritIMG_IMG(IMGDZL,IMGTGL);   // is this necessary?? do same for others
+   InheritIMG_IMG(IMGTGU,IMGTGL);   // is this necessary?? do same for others
+   InheritIMG_IMG(IMGDXU,IMGTGL);   // is this necessary?? do same for others
+   InheritIMG_IMG(IMGDYU,IMGTGL);   // is this necessary?? do same for others
+   InheritIMG_IMG(IMGDZU,IMGTGL);   // is this necessary?? do same for others
+   InheritIMG_IMG(IMGMGL,IMGTGL);   // is this necessary?? do same for others
+   InheritIMG_IMG(IMGMGU,IMGTGL);   // is this necessary?? do same for others
+   InheritIMG_IMG(IMGOST,IMGTGL);   // is this necessary?? do same for others
+   InheritIMG_IMG(IMGOSD,IMGTGL);   // is this necessary?? do same for others
+   InheritIMG_IMG(IMGIND,IMGTGL);   // is this necessary?? do same for others
+   InheritIMG_IMG(IMGDEP,IMGTGL);   // is this necessary?? do same for others
+
+
+   ProgName_SYS("Calculating M value grids...",1);
+
+ 
+  // --- Divide grids ---
+// the code for the math expression to create M values
+  IEXP0 = Create_IEXP();
+  AddGrid_IEXP(IEXP0,IMGDXL,"In1");
+  AddGrid_IEXP(IEXP0,IMGDYL,"In2");
+  AddGrid_IEXP(IEXP0,IMGDZL,"In3");
+  AddGrid_IEXP(IEXP0,IMGMGL,"Out1");
+      
+         rMax=1.0e30;  //a large number   ???delete previous two lines
+
+//         DoFormula_IEXP(IEXP0,"Out1=Min(sqrt(In1*In1+In2*In2)/(In3),$rMax);",1024);
+         DoFormula_IEXP(IEXP0,"Out1=Min(atan((sqrt(In1*In1+In2*In2))/(In3)),$rMax);",1024);
+		 //what happens for negative infinity????
+//the code for the math expression for the upper grid
+  IEXP1 = Create_IEXP();
+  AddGrid_IEXP(IEXP1,IMGDXU,"In4");
+  AddGrid_IEXP(IEXP1,IMGDYU,"In5");
+  AddGrid_IEXP(IEXP1,IMGDZU,"In6");
+  AddGrid_IEXP(IEXP1,IMGMGU,"Out2");
+
+         DoFormula_IEXP(IEXP1,"Out2=Min(atan((sqrt(In4*In4+In5*In5))/(In6)),$rMax);",1024);
+
+// find number of rows and columns
+   incols=iNX_IMG(IMGMGU);
+   inrows=iNY_IMG(IMGMGU);
+
+   ProgName_SYS("processing grids...",1);
+   Progress_SYS(1);
+
+// read in the first two rows of M, reading this into hVM1 and hVM2 for use on next row, put dummies in strike
+     hVV=Create_VV(GS_REAL,incols);
+     ReadY_IMG(IMGMGU,0,0,0,hVV);   //zero row
+     hVM1 = Create_VM(GS_REAL,incols);
+     CopyVVtoVM_VV(hVM1,hVV);
+     Destroy_VV(hVV);
+     hVV=Create_VV(GS_REAL,incols);
+     ReadY_IMG(IMGMGU,1,0,0,hVV);   //first row
+     hVM2 = Create_VM(GS_REAL,incols);
+     CopyVVtoVM_VV(hVM2,hVV);
+// also creat a VM for bottom row, but it is not filled until later
+     hVM0 = Create_VM(GS_REAL,incols);
+     Destroy_VV(hVV);
+// read in the first two rows of TU, reading this into hVMtu1 and hVMtu2 for use on next row
+// put dummies in strike
+     hVV=Create_VV(GS_REAL,incols);
+     ReadY_IMG(IMGTGU,0,0,0,hVV);   //zero row
+     hVMtu1 = Create_VM(GS_REAL,incols);
+     CopyVVtoVM_VV(hVMtu1,hVV);
+     Destroy_VV(hVV);
+     hVV=Create_VV(GS_REAL,incols);
+     ReadY_IMG(IMGTGU,1,0,0,hVV);   //first row
+     hVMtu2 = Create_VM(GS_REAL,incols);
+     CopyVVtoVM_VV(hVMtu2,hVV);
+// also creat a VM for bottom row, but it is not filled until later
+     hVMtu0 = Create_VM(GS_REAL,incols);
+     Destroy_VV(hVV);
+// read in the first two rows of DZU, reading this into hVMdzu1 and hVMdzu2 for use on next row
+// put dummies in strike
+     hVV=Create_VV(GS_REAL,incols);
+     ReadY_IMG(IMGDZU,0,0,0,hVV);   //zero row
+     hVMdzu1 = Create_VM(GS_REAL,incols);
+     CopyVVtoVM_VV(hVMdzu1,hVV);
+     Destroy_VV(hVV);
+     hVV=Create_VV(GS_REAL,incols);
+     ReadY_IMG(IMGDZU,1,0,0,hVV);   //first row
+     hVMdzu2 = Create_VM(GS_REAL,incols);
+     CopyVVtoVM_VV(hVMdzu2,hVV);
+// also creat a VM for bottom row, but it is not filled until later
+     hVMdzu0 = Create_VM(GS_REAL,incols);
+     Destroy_VV(hVV);
+
+// create VM and VV with dummies in them
+     hVMst= Create_VM(GS_REAL,incols);
+     for (icol=0;icol<incols;icol++) 
+      {
+        SetReal_VM(hVMst,icol,rDUMMY);
+      }
+// put dummies into the strike VV and write to output image
+     hVV= Create_VV(GS_REAL,incols);
+     CopyVMtoVV_VV(hVV,hVMst);   
+     WriteY_IMG(IMGOST,0,0,0,hVV);     //write to zeroth row
+// put same dummies in the other output images as well
+     WriteY_IMG(IMGOSD,0,0,0,hVV);
+     WriteY_IMG(IMGIND,0,0,0,hVV);
+     WriteY_IMG(IMGDEP,0,0,0,hVV);
+     Destroy_VV(hVV);
+     Destroy_VM(hVMst);
+	 
+// create all the VMs for the lower level 
+    hVML= Create_VM(GS_REAL,incols);
+    hVMtL= Create_VM(GS_REAL,incols);
+    hVMdzL= Create_VM(GS_REAL,incols);
+
+     
+// loop over the remaining rows  .. this reads all the rows, but in the write functions only
+// writes out to all but the second last row.
+     for (irow=2;irow<inrows;irow++) 
+       {
+
+// first shuffle VMs from hVM2 and hVM1 down one. overwriting the data in the VM
+       ipercent=irow*100/inrows;
+       ProgUpdate_SYS(ipercent);
+//     for (icol=0;icol<incols;icol++) 
+//      {
+//         SetReal_VM(hVM0,icol,rGetReal_VM(hVM1,icol));
+//      }
+//     for (icol=0;icol<incols;icol++) 
+//      {
+//         SetReal_VM(hVM1,icol,rGetReal_VM(hVM2,icol));
+//      }
+// the above 8 lines replaced by below
+        hVV=Create_VV(GS_REAL,incols);
+        CopyVMtoVV_VV(hVV,hVM1);
+        CopyVVtoVM_VV(hVM0,hVV);
+        CopyVMtoVV_VV(hVV,hVM2);
+        CopyVVtoVM_VV(hVM1,hVV);
+// now total field
+        CopyVMtoVV_VV(hVV,hVMtu1);
+        CopyVVtoVM_VV(hVMtu0,hVV);
+        CopyVMtoVV_VV(hVV,hVMtu2);
+        CopyVVtoVM_VV(hVMtu1,hVV);
+// now dz field
+        CopyVMtoVV_VV(hVV,hVMdzu1);
+        CopyVVtoVM_VV(hVMdzu0,hVV);
+        CopyVMtoVV_VV(hVV,hVMdzu2);
+        CopyVVtoVM_VV(hVMdzu1,hVV);
+        Destroy_VV(hVV);
+
+
+   
+//  Create a VV class instance to hold the data in the next row:
+    hVV = Create_VV(GS_REAL,incols);
+
+//  Read in the top row
+    ReadY_IMG(IMGMGU,irow,0,0,hVV);   //top row
+    CopyVVtoVM_VV(hVM2,hVV); 
+
+    ReadY_IMG(IMGTGU,irow,0,0,hVV);   //top row
+    CopyVVtoVM_VV(hVMtu2,hVV); 
+
+    ReadY_IMG(IMGDZU,irow,0,0,hVV);   //top row
+    CopyVVtoVM_VV(hVMdzu2,hVV); 
+
+
+// read the values from the lower level and copy into VMs created above
+    ReadY_IMG(IMGMGL,irow-1,0,0,hVV);
+    CopyVVtoVM_VV(hVML,hVV);
+    ReadY_IMG(IMGTGL,irow-1,0,0,hVV);
+    CopyVVtoVM_VV(hVMtL,hVV);
+    ReadY_IMG(IMGDZL,irow-1,0,0,hVV);
+    CopyVVtoVM_VV(hVMdzL,hVV);
+    Destroy_VV(hVV);                     
+
+// create VMs for the output data   
+    hVMst=Create_VM(GS_REAL,incols);
+    hVMsd=Create_VM(GS_REAL,incols);
+    hVMi =Create_VM(GS_REAL,incols);
+    hVMd =Create_VM(GS_REAL,incols);
+// fill the output data VMs with dummies
+     for (icol=0;icol<incols;icol++) 
+      {
+        SetReal_VM(hVMst,icol,rDUMMY);
+        SetReal_VM(hVMsd,icol,rDUMMY);
+        SetReal_VM(hVMi ,icol,rDUMMY);
+        SetReal_VM(hVMd ,icol,rDUMMY);
+      }
+
+//this is the processing over columns
+    for (icol=1;icol<incols-1;icol++) 
+      {
+      //copy the data from the three rows into the three by three array
+        mval[0]=rGetReal_VM(hVM0,icol-1);
+        mval[1]=rGetReal_VM(hVM0,icol);
+        mval[2]=rGetReal_VM(hVM0,icol+1);
+        mval[3]=rGetReal_VM(hVM1,icol-1);
+        mval[4]=rGetReal_VM(hVM1,icol);
+        mval[5]=rGetReal_VM(hVM1,icol+1);
+        mval[6]=rGetReal_VM(hVM2,icol-1);
+        mval[7]=rGetReal_VM(hVM2,icol);
+        mval[8]=rGetReal_VM(hVM2,icol+1);
+        tval[0]=rGetReal_VM(hVMtu0,icol-1);
+        tval[1]=rGetReal_VM(hVMtu0,icol);
+        tval[2]=rGetReal_VM(hVMtu0,icol+1);
+        tval[3]=rGetReal_VM(hVMtu1,icol-1);
+        tval[4]=rGetReal_VM(hVMtu1,icol);
+        tval[5]=rGetReal_VM(hVMtu1,icol+1);
+        tval[6]=rGetReal_VM(hVMtu2,icol-1);
+        tval[7]=rGetReal_VM(hVMtu2,icol);
+        tval[8]=rGetReal_VM(hVMtu2,icol+1);
+        dzval[0]=rGetReal_VM(hVMdzu0,icol-1);
+        dzval[1]=rGetReal_VM(hVMdzu0,icol);
+        dzval[2]=rGetReal_VM(hVMdzu0,icol+1);
+        dzval[3]=rGetReal_VM(hVMdzu1,icol-1);
+        dzval[4]=rGetReal_VM(hVMdzu1,icol);
+        dzval[5]=rGetReal_VM(hVMdzu1,icol+1);
+        dzval[6]=rGetReal_VM(hVMdzu2,icol-1);
+        dzval[7]=rGetReal_VM(hVMdzu2,icol);
+        dzval[8]=rGetReal_VM(hVMdzu2,icol+1);
+        mvalL=  rGetReal_VM(hVML,icol);   //mvalue on the lower datum
+        tL=  rGetReal_VM(hVMtL,icol);   //T on the lower datum
+        dzL=  rGetReal_VM(hVMdzL,icol);   //dz on the lower datum
+        iint=0;   //index for number of intersections, zero is first intersection
+      //do the twelve line segments
+        xint[iint]=-1.0;
+		if (mval[0]-mval[3]==0.0)
+		  {
+		  yint[iint]=1.1;     // this is a value that will be ignored
+		  }
+		else
+		  {
+          yint[iint]=(mval[0]-mvalL)/(mval[0]-mval[3]);
+		  }
+         //if there is an intersection onthe line segment, keep these values by incrementing iint
+        if (yint[iint]>=0.0 && yint[iint]<=1.0) 
+		   {
+		   if(rAbs_MATH(mval[0]-mval[3])<2.0)   // this ensures no wrap around when linear approximation is poor
+           {
+            tuint[iint]=(1.0-yint[iint])*tval[0]+yint[iint]*tval[3];
+            dzuint[iint]=(1.0-yint[iint])*dzval[0]+yint[iint]*dzval[3];
+            yint[iint]=-1.0+yint[iint];  //correct y location
+            iint=iint+1;
+           }
+		   }
+        xint[iint]=-1.0;
+        if (mval[3]-mval[6]==0.0)
+		  {
+		  yint[iint]=1.1;
+		  }
+		else
+		  {
+          yint[iint]=(mval[3]-mvalL)/(mval[3]-mval[6]);
+		  }
+         //if there is an intersection onthe line segment, keep these values by incrementing iint
+        if (yint[iint]>=0.0 && yint[iint]<=1.0)
+		   {
+		   if(rAbs_MATH(mval[3]-mval[6])<2.0)   // this ensures no wrap around when linear approximation is poor
+           {       
+            tuint[iint]=(1.0-yint[iint])*tval[3]+yint[iint]*tval[6];
+            dzuint[iint]=(1.0-yint[iint])*dzval[3]+yint[iint]*dzval[6];
+            iint=iint+1;
+           }
+		   }
+        xint[iint]=0.0;
+        if (mval[1]-mval[4]==0.0)
+		  {
+		  yint[iint]=1.1;
+		  }
+		else
+		  {
+          yint[iint]=(mval[1]-mvalL)/(mval[1]-mval[4]);
+		  }
+         //if there is an intersection onthe line segment, keep these values by incrementing iint
+        if (yint[iint]>=0.0 && yint[iint]<=1.0) 
+		   {
+		   if(rAbs_MATH(mval[1]-mval[4])<2.0)   // this ensures no wrap around when linear approximation is poor
+           {
+            tuint[iint]=(1.0-yint[iint])*tval[1]+yint[iint]*tval[4];
+            dzuint[iint]=(1.0-yint[iint])*dzval[1]+yint[iint]*dzval[4];
+            yint[iint]=-1.0+yint[iint];  //correct y location
+            iint=iint+1;
+           }
+		   }
+        xint[iint]=0.0;
+        if (mval[4]-mval[7]==0.0)
+		  {
+		  yint[iint]=1.1;
+		  }
+		else
+		  {
+          yint[iint]=(mval[4]-mvalL)/(mval[4]-mval[7]);
+		  }
+         //if there is an intersection onthe line segment, keep these values by incrementing iint
+        if (yint[iint]>=0.0 && yint[iint]<=1.0)
+		   {
+		   if(rAbs_MATH(mval[4]-mval[7])<2.0)   // this ensures no wrap around when linear approximation is poor
+           {
+            tuint[iint]=(1.0-yint[iint])*tval[4]+yint[iint]*tval[7];
+            dzuint[iint]=(1.0-yint[iint])*dzval[4]+yint[iint]*dzval[7];
+            iint=iint+1;
+           }
+		   }
+        xint[iint]=1.0;
+        if (mval[2]-mval[5]==0.0)
+		  {
+		  yint[iint]=1.1;
+		  }
+		else
+		  {
+          yint[iint]=(mval[2]-mvalL)/(mval[2]-mval[5]);
+		  }
+         //if there is an intersection onthe line segment, keep these values by incrementing iint
+        if (yint[iint]>=0.0 && yint[iint]<=1.0) 
+		   {
+		   if(rAbs_MATH(mval[2]-mval[5])<2.0)   // this ensures no wrap around when linear approximation is poor
+           {
+            tuint[iint]=(1.0-yint[iint])*tval[2]+yint[iint]*tval[5];
+            dzuint[iint]=(1.0-yint[iint])*dzval[2]+yint[iint]*dzval[5];
+            yint[iint]=-1.0+yint[iint];  //correct y location
+            iint=iint+1;
+           }
+		   }
+        xint[iint]=1.0;
+        if (mval[5]-mval[8]==0.0)
+		  {
+		  yint[iint]=1.1;
+		  }
+		else
+		  {
+          yint[iint]=(mval[5]-mvalL)/(mval[5]-mval[8]);
+		  }
+         //if there is an intersection onthe line segment, keep these values by incrementing iint
+        if (yint[iint]>=0.0 && yint[iint]<=1.0)
+		   {
+		   if(rAbs_MATH(mval[5]-mval[8])<2.0)   // this ensures no wrap around when linear approximation is poor
+           {
+            tuint[iint]=(1.0-yint[iint])*tval[5]+yint[iint]*tval[8];
+            dzuint[iint]=(1.0-yint[iint])*dzval[5]+yint[iint]*dzval[8];
+            iint=iint+1;
+           }
+		   }
+// now the six in the x direction
+        yint[iint]=-1.0;
+        if (mval[0]-mval[1]==0.0)
+		  {
+		  xint[iint]=1.1;
+		  }
+		else
+		  {
+          xint[iint]=(mval[0]-mvalL)/(mval[0]-mval[1]);
+		  }
+         //if there is an intersection onthe line segment, keep these values by incrementing iint
+        if (xint[iint]>=0.0 && xint[iint]<=1.0) 
+		   {
+		   if(rAbs_MATH(mval[0]-mval[1])<2.0)   // in this case, there is a wrap around and linear approximation is poor
+           {
+            tuint[iint]=(1.0-xint[iint])*tval[0]+xint[iint]*tval[1];
+            dzuint[iint]=(1.0-xint[iint])*dzval[0]+xint[iint]*dzval[1];
+            xint[iint]=-1.0+xint[iint];  //correct x location
+            iint=iint+1;
+           }
+		   }
+        yint[iint]=-1.0;
+        if (mval[1]-mval[2]==0.0)
+		  {
+		  xint[iint]=1.1;
+		  }
+		else
+		  {
+          xint[iint]=(mval[1]-mvalL)/(mval[1]-mval[2]);
+		  }
+         //if there is an intersection onthe line segment, keep these values by incrementing iint
+        if (xint[iint]>=0.0 && xint[iint]<=1.0) 
+		   {
+		   if(rAbs_MATH(mval[1]-mval[2])<2.0)   // in this case, there is a wrap around and linear approximation is poor
+           {
+            tuint[iint]=(1.0-xint[iint])*tval[1]+xint[iint]*tval[2];
+            dzuint[iint]=(1.0-xint[iint])*dzval[1]+xint[iint]*dzval[2];
+            iint=iint+1;
+           }
+		   }
+        yint[iint]=0.0;
+        if (mval[3]-mval[4]==0.0)
+		  {
+		  xint[iint]=1.1;
+		  }
+		else
+		  {
+          xint[iint]=(mval[3]-mvalL)/(mval[3]-mval[4]);
+		  }
+         //if there is an intersection onthe line segment, keep these values by incrementing iint
+        if (xint[iint]>=0.0 && xint[iint]<=1.0) 
+		   {
+		   if(rAbs_MATH(mval[3]-mval[4])<2.0)   // in this case, there is a wrap around and linear approximation is poor
+           {
+            tuint[iint]=(1.0-xint[iint])*tval[3]+xint[iint]*tval[4];
+            dzuint[iint]=(1.0-xint[iint])*dzval[3]+xint[iint]*dzval[4];
+            xint[iint]=-1.0+xint[iint];  //correct x location
+            iint=iint+1;
+           }
+		   }
+        yint[iint]=0.0;
+        if (mval[4]-mval[5]==0.0)
+		  {
+		  xint[iint]=1.1;
+		  }
+		else
+		  {
+          xint[iint]=(mval[4]-mvalL)/(mval[4]-mval[5]);
+		  }
+         //if there is an intersection onthe line segment, keep these values by incrementing iint
+        if (xint[iint]>=0.0 && xint[iint]<=1.0) 
+		   {
+		   if(rAbs_MATH(mval[4]-mval[5])<2.0)   // in this case, there is a wrap around and linear approximation is poor
+           {                                                       
+            tuint[iint]=(1.0-xint[iint])*tval[4]+xint[iint]*tval[5];
+            dzuint[iint]=(1.0-xint[iint])*dzval[4]+xint[iint]*dzval[5];
+            iint=iint+1;
+           }
+           }		   
+        yint[iint]=1.0;
+        if (mval[6]-mval[7]==0.0)
+		  {
+		  xint[iint]=1.1;
+		  }
+		else
+		  {
+          xint[iint]=(mval[6]-mvalL)/(mval[6]-mval[7]);
+		  }
+         //if there is an intersection onthe line segment, keep these values by incrementing iint
+        if (xint[iint]>=0.0 && xint[iint]<=1.0) 
+		   {
+		   if(rAbs_MATH(mval[6]-mval[7])<2.0)   // in this case, there is a wrap around and linear approximation is poor
+           {
+            tuint[iint]=(1.0-xint[iint])*tval[6]+xint[iint]*tval[7];
+            dzuint[iint]=(1.0-xint[iint])*dzval[6]+xint[iint]*dzval[7];
+            xint[iint]=-1.0+xint[iint];  //correct x location
+            iint=iint+1;
+           }
+		   }
+        yint[iint]=1.0;
+        if (mval[7]-mval[8]==0.0)
+		  {
+		  xint[iint]=1.1;
+		  }
+		else
+		  {
+          xint[iint]=(mval[7]-mvalL)/(mval[7]-mval[8]);
+		  }
+         //if there is an intersection onthe line segment, keep these values by incrementing iint
+        if (xint[iint]>=0.0 && xint[iint]<=1.0) 
+		   {
+		   if(rAbs_MATH(mval[7]-mval[8])<2.0)   // in this case, there is a wrap around and linear approximation is poor
+           {
+            tuint[iint]=(1.0-xint[iint])*tval[7]+xint[iint]*tval[8];
+            dzuint[iint]=(1.0-xint[iint])*dzval[7]+xint[iint]*dzval[8];
+            iint=iint+1;
+           }
+		   }
+//// if there are less than two intersections, then there is not a source below, but strike etc already rDUMMY
+//// if intersection, then calculate strike
+        if (iint>=1)
+          {
+           icomb=0;
+           xave=0.0;
+           yave=0.0;
+           tuave=0.0;
+           dzuave=0.0;
+           stkave=0.0;
+           for (ii=0;ii<iint;ii++)
+             {
+             xave=xave+xint[ii];
+             yave=yave+yint[ii];
+             tuave=tuave+tuint[ii];
+             dzuave=dzuave+dzuint[ii];
+             for (jj=ii+1;jj<iint;jj++)
+               {
+                delx=xint[ii]-xint[jj];
+                dely=yint[ii]-yint[jj];
+//                calculate the strike angle 
+               
+                if (rAbs_MATH(delx)<=0.00001)
+                  {
+                   if (delx<0.0)
+                      {
+                        if(dely>0.0)
+                          {
+                            stk[icomb]=-90.0;
+                          }
+                        else
+                          {
+                            stk[icomb]=90.0;
+                          }
+                      }
+                   else
+                      {
+                        if(dely>0.0)
+                          {
+                            stk[icomb]=90.0;
+                          }
+                        else
+                          {
+                            stk[icomb]=-90.0;
+                          }
+                      }
+                   stkave=stkave+stk[icomb];
+                  }
+                else
+                  {
+                   rval=dely/delx;                  
+                   stk[icomb]=57.29578*rArcTan_MATH(rval);
+                   stkave=stkave+stk[icomb];
+                  }
+                icomb=icomb+1;
+               }       //end of jj
+             }         //end of ii
+//calculate the mean of the positions
+           xave=xave/((real)(iint));
+           yave=yave/((real)(iint));   //was xave
+           tuave=tuave/((real)(iint));
+           dzuave=dzuave/((real)(iint));
+//calculate the mean and standard deviation
+           if (icomb==0) 
+             {
+               stksd=rDUMMY;
+             }
+           else
+             {
+//calculate the mean of the strike
+               stkave=stkave/((real)(icomb));
+//calculate the standard deviation of the strike
+               stksd=0.0;
+               if (icomb<=1)
+                 {
+                  stksd=rDUMMY;
+                 }
+               else
+                 {  
+                 for (ii=0;ii<icomb;ii++)
+                   {
+                    stksd=stksd+(stkave-stk[ii])*(stkave-stk[ii]);
+                   }
+                 rval=stksd/((real)(icomb-1));    
+                 stksd=rSqrt_MATH(rval);
+                 }
+             }
+// calcuate the source parameter quantities
+           rval=stkave/57.29578;
+           dely=rSin_MATH(rval);
+           delx=rCos_MATH(rval);
+           rt=-(xave*delx+yave*dely)/(delx*delx+dely*dely);
+           rval=(xave+rt*delx);
+           deltar=rval*rval;
+           rval=(yave+rt*dely);
+           rval=deltar+rval*rval + rUPC*rUPC;
+           deltar=rSqrt_MATH(rval);
+           rtheta=57.29578*rArcCos_MATH(rUPC/deltar); 
+           if ((rAbs_MATH(rtheta)<=27.0 ) )  //&& stksd!=rDUMMY)    //display the results 
+             {
+             if (tL==0.0)
+			  {
+			  rval=1000.0;    // a big number
+			  }
+			 else 
+			  {
+			  rval=tuave/tL;       
+			  }
+             if (dzL==0.0)
+			  {
+			  rC=1000.0;    // a big number
+			  }
+			 else
+			  {
+			  rC=(rval)/(dzuave/dzL); 
+			  }
+			 tmp=rLog_MATH(rC);
+			 if (tmp==0.0)
+			  {
+			  rn=6.0;    // an unrealistically large value
+			  }
+			 else
+			  {
+                          rn=rLog_MATH(rval)/tmp;
+			  }
+			 if (rC==1.0)
+			  {
+			  rdepth=-1.0;    // a negative value will later be ignored
+			  }
+			 else
+			  {
+                          rdepth=rUPC/(rC-1.0);
+			  }
+// now write the results to the VMs
+                 //this line gets rid of sources above the ground // and solutions associated with wrap around of m on the upper datum
+//             if (rdepth<0.0 || (rAbs_MATH(mval[4]-mval[1])>2.0 || (rAbs_MATH(mval[4]-mval[3])>2.0 ||(rAbs_MATH(mval[4]-mval[5])>2.0 ||(rAbs_MATH(mval[4]-mval[7])>2.0 )))))
+             if (rdepth<0.0 || (rn < -3.5 || (rn > 0.5)) )
+			 {
+               rval=rDUMMY ;
+               SetReal_VM(hVMst,icol,rval);
+               SetReal_VM(hVMsd,icol,rval);
+               SetReal_VM(hVMi,icol,rval);
+               SetReal_VM(hVMd,icol,rval);
+			 }
+			 else
+			 {
+               rval=90.0 - stkave ;
+               SetReal_VM(hVMst,icol,rval);
+               rval=stksd;
+               SetReal_VM(hVMsd,icol,rval);
+               rval=-1.0*rn;
+               SetReal_VM(hVMi,icol,rval);
+               rval=rdepth;
+               SetReal_VM(hVMd,icol,rval);
+			 }
+             }
+
+          }   //this is the end of the processing if iint >=1
+        
+      }   //this is the end of the processing over the columns
+       // Create and put the strike data back in the VV for this row:
+           hVV=Create_VV(GS_REAL,incols);
+           CopyVMtoVV_VV(hVV,hVMst);   
+       // Put the VV back in the output file:
+           WriteY_IMG(IMGOST,irow-1,0,0,hVV);
+       // Destroy VV
+           Destroy_VV(hVV);
+       // Create and put the strike standard deviation data back in the VV for this row:
+           hVV=Create_VV(GS_REAL,incols);
+           CopyVMtoVV_VV(hVV,hVMsd);   
+       // Put the VV back in the output file:
+           WriteY_IMG(IMGOSD,irow-1,0,0,hVV);
+       // Destroy VV
+           Destroy_VV(hVV);
+       // Create and put the index data back in the VV for this row:
+           hVV=Create_VV(GS_REAL,incols);
+           CopyVMtoVV_VV(hVV,hVMi);   
+       // Put the VV back in the output file:
+           WriteY_IMG(IMGIND,irow-1,0,0,hVV);
+       // Destroy VV
+           Destroy_VV(hVV);
+       // Create and put the depth data back in the VV for this row:
+           hVV=Create_VV(GS_REAL,incols);
+           CopyVMtoVV_VV(hVV,hVMd);   
+       // Put the VV back in the output file:
+           WriteY_IMG(IMGDEP,irow-1,0,0,hVV);
+       // Destroy VV
+           Destroy_VV(hVV);
+
+       //destroy all the VMs for this row
+           Destroy_VM(hVMst);
+           Destroy_VM(hVMsd);
+           Destroy_VM(hVMi);
+           Destroy_VM(hVMd);
+
+    }   //end of loop over the rows
+
+// destroy VMs for the lower level
+           Destroy_VM(hVML);
+           Destroy_VM(hVMtL);
+           Destroy_VM(hVMdzL);
+
+
+// now do the final row
+// create VM and VV with dummies in them
+     hVMst= Create_VM(GS_REAL,incols);
+     for (icol=0;icol<incols;icol++) 
+      {
+        SetReal_VM(hVMst,icol,rDUMMY);
+      }
+// put dummies into the strike VV and write to all the output images
+     hVV= Create_VV(GS_REAL,incols);
+     CopyVMtoVV_VV(hVV,hVMst);   
+     WriteY_IMG(IMGOST,inrows-1,0,0,hVV);
+     WriteY_IMG(IMGOSD,inrows-1,0,0,hVV);
+     WriteY_IMG(IMGIND,inrows-1,0,0,hVV);
+     WriteY_IMG(IMGDEP,inrows-1,0,0,hVV);
+     Destroy_VV(hVV);
+     Destroy_VM(hVMst);
+ // finally destroy the VMs that have been storing the M anf T data throughout loops over rows
+     Destroy_VM(hVM0);
+     Destroy_VM(hVM1);
+     Destroy_VM(hVM2);
+     Destroy_VM(hVMtu0);
+     Destroy_VM(hVMtu1);
+     Destroy_VM(hVMtu2);
+     Destroy_VM(hVMdzu0);
+     Destroy_VM(hVMdzu1);
+     Destroy_VM(hVMdzu2);
+
+
+   // --- Destroy the Images ---
+   
+   Destroy_IEXP(IEXP0);    //if you get a parse error, check the DoFormula
+   Destroy_IEXP(IEXP1);    //if you get a parse error, check the DoFormula
+   Destroy_IMG(IMGTGL);
+   Destroy_IMG(IMGDXL);
+   Destroy_IMG(IMGDYL);
+   Destroy_IMG(IMGDZL);
+   Destroy_IMG(IMGTGU);
+   Destroy_IMG(IMGDXU);
+   Destroy_IMG(IMGDYU);
+   Destroy_IMG(IMGDZU);
+   Destroy_IMG(IMGMGL);
+   Destroy_IMG(IMGMGU);
+   Destroy_IMG(IMGOST);
+   Destroy_IMG(IMGOSD);
+   Destroy_IMG(IMGIND);
+   Destroy_IMG(IMGDEP);
+        
+
+   // --- done ---
+
+   Progress_SYS(0);
+   
+
+   // --- Add these output grids to the current project ---
+
+//   if (iInteractive_SYS())   
+//      iAddDocument_PROJ(sMgl,"Grid",1);
+//   if (iInteractive_SYS())   
+//      iAddDocument_PROJ(sMgu,"Grid",1);
+   if (iInteractive_SYS())   
+      iAddDocument_PROJ(sStg,"Grid",1);
+   if (iInteractive_SYS())   
+      iAddDocument_PROJ(sSsd,"Grid",1);
+   if (iInteractive_SYS())   
+      iAddDocument_PROJ(sInd,"Grid",1);
+   if (iInteractive_SYS())   
+      iAddDocument_PROJ(sDep,"Grid",1);
+   
+}

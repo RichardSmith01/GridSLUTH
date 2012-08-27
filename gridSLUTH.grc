@@ -1,0 +1,26 @@
+//
+// GRIDSLUTH.GRC
+//-----------------------------------------------------------------------------
+
+RESOURCE,FORM,GRIDSLUTHForm,"Compute magnetic source info",-1
+FEDIT,,,30,"Lower total field grid:",R,OLD,,,*.grd
+FEDIT,,,30,"Lower x derivative grid:",R,OLD,,,*.grd
+FEDIT,,,30,"Lower y derivative grid:",R,OLD,,,*.grd
+FEDIT,,,30,"Lower z derivative grid:",R,OLD,,,*.grd
+EDIT,,,10,"No. cells following grids upward continued",R,real,1.0
+FEDIT,,,30,"Upper Total Field:",R,OLD,,,*.grd
+FEDIT,,,30,"Upper x derivative grid:",R,OLD,,,*.grd
+FEDIT,,,30,"Upper y derivative grid:",R,OLD,,,*.grd
+FEDIT,,,30,"Upper z derivative grid:",R,OLD,,,*.grd
+FEDIT,,,30,"Output lower M values grid:",R,NEW,,,*.grd
+FEDIT,,,30,"Output upper M values grid:",R,NEW,,,*.grd
+FEDIT,,,30,"Output Strike grid:",R,NEW,,,*.grd
+FEDIT,,,30,"Output Strike stand. dev. grid:",R,NEW,,,*.grd
+FEDIT,,,30,"Output Index grid:",R,NEW,,,*.grd
+FEDIT,,,30,"Output Depth grid:",R,NEW,,,*.grd
+EBUT,&OK,0
+EBUT,&Cancel,1,CANCEL
+HBUT,&Help,help
+
+RESOURCE,HELP,help,nogx.hlp
+

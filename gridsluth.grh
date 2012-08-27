@@ -1,0 +1,55 @@
+﻿//------------------------------------------------------------------------
+//                         RESOURCE HEADER FILE
+//------------------------------------------------------------------------
+//
+// INPUT RESOURCE SCRIPT : gridsluth.grc
+//
+
+//------------------------------------------------------------------------
+// FORM RESOURCE GRIDSLUTHForm
+
+// _GRIDSLUTHFORM_0   File Edit Field - Lower total field grid:
+// _GRIDSLUTHFORM_1   File Edit Field - Lower x derivative grid:
+// _GRIDSLUTHFORM_2   File Edit Field - Lower y derivative grid:
+// _GRIDSLUTHFORM_3   File Edit Field - Lower z derivative grid:
+// _GRIDSLUTHFORM_4   Edit Field - No. cells following grids upward continued
+// _GRIDSLUTHFORM_5   File Edit Field - Upper Total Field:
+// _GRIDSLUTHFORM_6   File Edit Field - Upper x derivative grid:
+// _GRIDSLUTHFORM_7   File Edit Field - Upper y derivative grid:
+// _GRIDSLUTHFORM_8   File Edit Field - Upper z derivative grid:
+// _GRIDSLUTHFORM_9   File Edit Field - Output lower M values grid:
+// _GRIDSLUTHFORM_10  File Edit Field - Output upper M values grid:
+// _GRIDSLUTHFORM_11  File Edit Field - Output Strike grid:
+// _GRIDSLUTHFORM_12  File Edit Field - Output Strike stand. dev. grid:
+// _GRIDSLUTHFORM_13  File Edit Field - Output Index grid:
+// _GRIDSLUTHFORM_14  File Edit Field - Output Depth grid:
+// _GRIDSLUTHFORM_15  Exit Button - OK
+// _GRIDSLUTHFORM_16  Exit Button - Cancel
+// _GRIDSLUTHFORM_17  Help Button - Help
+
+#define _GRIDSLUTHFORM_0  ((DGW_OBJ) 0  )
+#define _GRIDSLUTHFORM_1  ((DGW_OBJ) 1  )
+#define _GRIDSLUTHFORM_2  ((DGW_OBJ) 2  )
+#define _GRIDSLUTHFORM_3  ((DGW_OBJ) 3  )
+#define _GRIDSLUTHFORM_4  ((DGW_OBJ) 4  )
+#define _GRIDSLUTHFORM_5  ((DGW_OBJ) 5  )
+#define _GRIDSLUTHFORM_6  ((DGW_OBJ) 6  )
+#define _GRIDSLUTHFORM_7  ((DGW_OBJ) 7  )
+#define _GRIDSLUTHFORM_8  ((DGW_OBJ) 8  )
+#define _GRIDSLUTHFORM_9  ((DGW_OBJ) 9  )
+#define _GRIDSLUTHFORM_10 ((DGW_OBJ) 10 )
+#define _GRIDSLUTHFORM_11 ((DGW_OBJ) 11 )
+#define _GRIDSLUTHFORM_12 ((DGW_OBJ) 12 )
+#define _GRIDSLUTHFORM_13 ((DGW_OBJ) 13 )
+#define _GRIDSLUTHFORM_14 ((DGW_OBJ) 14 )
+#define _GRIDSLUTHFORM_15 ((DGW_OBJ) 15 )
+#define _GRIDSLUTHFORM_16 ((DGW_OBJ) 16 )
+#define _GRIDSLUTHFORM_17 ((DGW_OBJ) 17 )
+
+
+//------------------------------------------------------------------------
+// HELP RESOURCE help
+
+//------------------------------------------------------------------------
+// HELP RESOURCE help_rtf
+
